@@ -1,5 +1,5 @@
 model_card:
-  model_name: "/mnt/weka/data/pytorch/llama3.1/Meta-Llama-3.1-8B-Instruct"
+  model_name: "/root/mnt/weka/data/pytorch/huggingface/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659/"
   tasks: gsm8k_cot_llama
   num_fewshot: 8
   fewshot_as_multiturn: true

@@ -1,5 +1,5 @@
 model_card:
-  model_name: "/mnt/weka/llm/Llama-4-Scout-17B-16E-Instruct"
+  model_name: "/root/mnt/weka/data/aice/Llama-4-Maverick-17B-128E-Instruct-FP8"
   tasks: multimodal_generation
   num_fewshot: 5
   limit: 250
