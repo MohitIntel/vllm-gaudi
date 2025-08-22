@@ -22,7 +22,7 @@ logger = init_logger()
 
 
 class HpuPlatform(Platform):
-    _enum = PlatformEnum.OOT if envs.VLLM_USE_V1 else PlatformEnum.HPU
+    _enum = PlatformEnum.OOT ##if envs.VLLM_USE_V1 else PlatformEnum.HPU
     device_name: str = "hpu"
     device_type: str = "hpu"
     dispatch_key: str = "HPU"
@@ -70,7 +70,7 @@ class HpuPlatform(Platform):
                     "vllm_gaudi.v1.worker.hpu_worker.HPUWorker"
             else:
                 parallel_config.worker_cls = \
-                    "vllm.worker.hpu_worker.HPUWorker"
+                    "vllm_gaudi.worker.hpu_worker.HPUWorker"
 
         # NOTE(kzawora): default block size for Gaudi should be 128
         # smaller sizes still work, but very inefficiently

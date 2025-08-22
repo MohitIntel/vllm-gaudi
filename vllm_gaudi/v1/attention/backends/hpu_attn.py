@@ -38,6 +38,14 @@ class HPUAttentionMetadataV1(HPUAttentionMetadata):
 
     seq_lens_tensor: Optional[torch.Tensor]
     context_lens_tensor: Optional[torch.Tensor]
+    window_block_list: Optional[torch.Tensor] = None
+    window_slot_mapping: Optional[torch.Tensor] = None
+    window_block_mapping: Optional[torch.Tensor] = None
+    window_block_groups: Optional[torch.Tensor] = None
+    window_block_usage: Optional[torch.Tensor] = None
+    window_attn_bias: Optional[torch.Tensor] = None
+    use_window_sdpa: Optional[bool] = None
+    sliding_window_right: Optional[int] = None
 
     @classmethod
     def make_prefill_metadata(cls, attn_bias, block_list, context_lens_tensor,

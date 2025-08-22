@@ -41,15 +41,16 @@ class PROMPT_DATA:
         self._data = self._data
 
     def get_prompts(self,
+                model_name: str = "",
                 modality: str = "image",
                 media_source: str = "default",
                 num_prompts: int = 1,
                 skip_vision_data=False
                 ) -> Union[dict, list[dict]]:
         if modality == "image":
-            placeholder = "<|image_pad|>"
+            placeholder = "<image>" if "gemma" in model_name.lower() else "<|image_pad|>"
         elif modality == "video":
-            placeholder = "<|video_pad|>"
+            placeholder = "<video>" if "gemma" in model_name.lower() else "<|video_pad|>"
         else:
             raise ValueError(
                 (f"Unsupported modality: {modality}."
@@ -164,6 +165,7 @@ def start_test(model_card_path: str):
 
             data = PROMPT_DATA()
             inputs = data.get_prompts(
+                    model_name=model_name,
                     modality=modality, 
                     media_source=media_source, 
                     num_prompts=num_prompts
@@ -172,6 +174,7 @@ def start_test(model_card_path: str):
             logger.info(f"*** Questions for modality {modality}:"
                         f" {data._questions[modality]}"
             )
+            import pdb;pdb.set_trace()
             responses = run_model(
                 model_name, inputs, 
                 modality, 

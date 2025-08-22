@@ -137,8 +137,11 @@ echo "Test with QWEN3-30B-A3B passed"
 echo "Testing gemma-3-27b-it"
 echo "VLLM_SKIP_WARMUP=true VLLM_CONTIGUOUS_PA=False PT_HPU_LAZY_MODE=1 VLLM_USE_V1=1 \
 python -u vllm-gaudi/tests/models/language/multimodal/generation_mm.py --model-card-path vllm-gaudi/tests/full_tests/model_cards/gemma-3-27b-it.yaml"
+##VLLM_SKIP_WARMUP=true VLLM_CONTIGUOUS_PA=False PT_HPU_LAZY_MODE=1 VLLM_USE_V1=1 \
+##python -u vllm-gaudi/tests/models/language/multimodal/generation_mm.py --model-card-path vllm-gaudi/tests/full_tests/model_cards/gemma-3-27b-it.yaml
 VLLM_SKIP_WARMUP=true VLLM_CONTIGUOUS_PA=False PT_HPU_LAZY_MODE=1 VLLM_USE_V1=1 \
-python -u vllm-gaudi/tests/models/language/multimodal/generation_mm.py --model-card-path vllm-gaudi/tests/full_tests/model_cards/gemma-3-27b-it.yaml
+python -u vllm-gaudi/tests/models/language/multimodal/generation_mm.py --model-card-path vllm-gaudi/tests/full_tests/model_cards/qwen2.5-vl-7b.yaml
+
 if [ $? -ne 0 ]; then
     echo "Error: Test failed for multimodal-support with gemma-3-27b-it" >&2
     exit -1
