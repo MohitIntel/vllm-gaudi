@@ -28,18 +28,18 @@ from typing import (TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple,
 import habana_frameworks.torch as htorch
 import habana_frameworks.torch.internal.bridge_config as bc
 import torch
-import vllm_hpu_extension.environment as environment
+import vllm_gaudi.extension.environment as environment
 from attr import dataclass
-from vllm_hpu_extension.bucketing.common import HPUBucketingManager
-from vllm_hpu_extension.ops import LoraMask as LoraMask
-from vllm_hpu_extension.profiler import (HabanaHighLevelProfiler,
+from vllm_gaudi.extension.bucketing.common import HPUBucketingManager
+from vllm_gaudi.extension.ops import LoraMask as LoraMask
+from vllm_gaudi.extension.profiler import (HabanaHighLevelProfiler,
                                          HabanaMemoryProfiler, format_bytes)
-from vllm_hpu_extension.runtime import get_config
+from vllm_gaudi.extension.runtime import get_config
 
 import vllm.envs as envs
 from vllm.attention import AttentionMetadata, get_attn_backend
 from vllm.attention.backends.abstract import AttentionType
-from vllm.attention.backends.hpu_attn import HPUAttentionImpl
+from vllm_gaudi.attention.backends.hpu_attn import HPUAttentionImpl
 from vllm.config import DeviceConfig, VllmConfig
 from vllm.distributed import broadcast_tensor_dict, get_pp_group
 from vllm.distributed.kv_transfer import get_kv_transfer_group
@@ -72,9 +72,9 @@ from vllm.sequence import (CompletionSequenceGroupOutput, IntermediateTensors,
                            Logprob, SequenceData, SequenceGroupMetadata,
                            SequenceOutput)
 from vllm.transformers_utils.config import uses_mrope
-from vllm.utils import (bind_kv_cache, is_fake_hpu, is_pin_memory_available,
-                        make_mrope_positions_tensor_with_pad,
+from vllm.utils import (bind_kv_cache, is_pin_memory_available,
                         make_tensor_with_pad)
+from vllm_gaudi.utils import (is_fake_hpu, make_mrope_positions_tensor_with_pad)
 from vllm.worker.model_runner_base import (
     ModelRunnerBase, ModelRunnerInputBase,
     _add_attn_metadata_broadcastable_dict,
@@ -83,7 +83,7 @@ from vllm.worker.model_runner_base import (
     _init_sampling_metadata_from_tensor_dict)
 
 if TYPE_CHECKING:
-    from vllm.attention.backends.abstract import AttentionBackend
+    from vllm_gaudi.attention.backends.abstract import AttentionBackend
 
 logger = init_logger(__name__)
 

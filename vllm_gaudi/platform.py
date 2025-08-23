@@ -48,9 +48,9 @@ class HpuPlatform(Platform):
         # Fall back to in-tree HPUAttention backend
         if use_mla:
             logger.info("Using HPUAttentionMLA backend.")
-            return "vllm.attention.backends.hpu_attn.HPUMLAAttentionBackend"
+            return "vllm_gaudi.attention.backends.hpu_attn.HPUMLAAttentionBackend"
         logger.info("Using HPUAttention backend.")
-        return "vllm.attention.backends.hpu_attn.HPUAttentionBackend"
+        return "vllm_gaudi.attention.backends.hpu_attn.HPUAttentionBackend"
 
     @classmethod
     def is_async_output_supported(cls, enforce_eager: Optional[bool]) -> bool:

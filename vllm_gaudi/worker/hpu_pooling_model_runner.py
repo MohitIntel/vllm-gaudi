@@ -14,7 +14,7 @@ from vllm.model_executor.pooling_metadata import PoolingMetadata
 from vllm.pooling_params import PoolingParams
 from vllm.sequence import (IntermediateTensors, PoolerOutput, SequenceData,
                            SequenceGroupMetadata)
-from vllm.worker.hpu_model_runner import HPUModelRunnerBase, ModelInputForHPU
+from vllm_gaudi.worker.hpu_model_runner import HPUModelRunnerBase, ModelInputForHPU
 
 
 @dataclasses.dataclass(frozen=True)

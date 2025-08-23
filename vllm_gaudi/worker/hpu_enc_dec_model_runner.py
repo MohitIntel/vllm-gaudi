@@ -20,7 +20,7 @@ from vllm.sequence import (CompletionSequenceGroupOutput, IntermediateTensors,
                            Logprob, SequenceGroupMetadata, SequenceOutput)
 from vllm.utils import bind_kv_cache
 from vllm_gaudi.utils import is_fake_hpu
-from vllm.worker.hpu_model_runner import (CachedStepOutput, HpuModelAdapter,
+from vllm_gaudi.worker.hpu_model_runner import (CachedStepOutput, HpuModelAdapter,
                                           HPUModelRunnerBase,
                                           ModelInputForHPUWithSamplingMetadata,
                                           setup_profiler, subtuple)
@@ -29,7 +29,7 @@ from vllm.worker.model_runner_base import (
     _add_sampling_metadata_broadcastable_dict)
 
 if TYPE_CHECKING:
-    from vllm.attention.backends.abstract import AttentionBackend
+    from vllm_gaudi.attention.backends.abstract import AttentionBackend
 
 logger = init_logger(__name__)
 
