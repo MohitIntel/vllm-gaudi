@@ -984,15 +984,15 @@ class HPUModelRunnerBase(ModelRunnerBase[TModelInputForHPU]):
         self.max_num_seqs = self.scheduler_config.max_num_seqs
         self.max_num_prefill_seqs = \
             self.scheduler_config.max_num_prefill_seqs \
-            if self.scheduler_config.max_num_prefill_seqs is not None \
+            if hasattr(self.scheduler_config,"max_num_prefill_seqs") and self.scheduler_config.max_num_prefill_seqs is not None \
                 else self.max_num_seqs
         self.max_model_len = self.scheduler_config.max_model_len
         self.max_num_batched_tokens = \
             self.scheduler_config.max_num_batched_tokens
         self.block_size = self.cache_config.block_size
         self.use_merged_prefill = get_config().merged_prefill
-        assert not (self.scheduler_config.use_padding_aware_scheduling
-                    and self.use_merged_prefill), \
+        if hasattr(self.scheduler_config,"use_padding_aware_scheduling"):
+            assert not (self.use_merged_prefill and self.scheduler_config.use_padding_aware_scheduling), \
             'Merged prefill is not compatible with padding aware scheduling!'
 
         self.pin_memory = is_pin_memory_available()
