@@ -48,7 +48,7 @@ class PROMPT_DATA:
                 skip_vision_data=False
                 ) -> Union[dict, list[dict]]:
         if modality == "image":
-            placeholder = "<image>" if "gemma" in model_name.lower() else "<|image_pad|>"
+            placeholder = "<start_of_image>" if "gemma" in model_name.lower() else "<|image_pad|>"
         elif modality == "video":
             placeholder = "<video>" if "gemma" in model_name.lower() else "<|video_pad|>"
         else:
