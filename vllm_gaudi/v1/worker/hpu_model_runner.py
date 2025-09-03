@@ -276,9 +276,6 @@ class HpuModelAdapter(torch.nn.Module):
         self.vllm_config = vllm_config
         self.block_size = vllm_config.cache_config.block_size
         self.dtype = vllm_config.model_config.dtype
-        self._rotary_embed_module = self._get_rotary_embedding_module(
-            self.model)
-        self._rotary_prepare_cos_sin = self._get_prepare_cos_sin()
         self.is_mm_optimized = is_mm_optimized(self.model)
         text_config = vllm_config.model_config.hf_config.get_text_config()
         self.interleaved_sliding_window = getattr(
@@ -295,6 +292,26 @@ class HpuModelAdapter(torch.nn.Module):
             os.environ["PT_HPU_SDPA_BC_FACTOR"] = str(self.slice_size)
             os.environ["PT_HPU_SDPA_BR_FACTOR"] = str(self.slice_size)
             os.environ["PT_HPU_QKV_SLICE_SEQ_LEN_THLD"] = str(self.slice_size)
+
+        if htorch.utils.internal.is_lazy():
+            if self.model_is_mrope and hasattr(self.model, 'visual'):
+                logger.info("[Multimodal] Wrapping Visual Model")
+                self.model.visual = htorch.hpu.wrap_in_hpu_graph(
+                    self.model.visual, disable_tensor_cache=True)
+
+            if self.is_mm_optimized:
+                if hasattr(self.model, 'vision_tower'):
+                    self.model.vision_tower = htorch.hpu.wrap_in_hpu_graph(
+                        self.model.vision_tower, disable_tensor_cache=True)
+                if hasattr(self.model, 'multi_modal_projector'):
+                    self.model.multi_modal_projector = \
+                            htorch.hpu.wrap_in_hpu_graph( \
+                            self.model.multi_modal_projector, \
+                            disable_tensor_cache=True)
+
+        self._rotary_embed_module = self._get_rotary_embedding_module(
+            self.model)
+        self._rotary_prepare_cos_sin = self._get_prepare_cos_sin()
 
     def _get_rotary_embedding_module(self, model: torch.nn.Module):
         """
@@ -371,6 +388,7 @@ class HpuModelAdapter(torch.nn.Module):
                                              "TrimmedAttentionMetadata",
                                              attn_bias=attn_bias)
         return attn_metadata
+
     def _set_attn_bias_for_sliding_window(self, attn_metadata, batch_size,
                                           seq_len, window_size, device, dtype):
 
@@ -426,10 +444,9 @@ class HpuModelAdapter(torch.nn.Module):
             block_mapping.masked_fill_(oob_values.unsqueeze(-1), 0)
             block_groups.masked_fill_(oob_values, batch_size)
             if is_window_block:
-                metadata = custom_tuple_replace(
-                    metadata,
-                    "TrimmedAttentionMetadata",
-                    window_block_groups=block_groups)
+                metadata = custom_tuple_replace(metadata,
+                                                "TrimmedAttentionMetadata",
+                                                window_block_groups=block_groups)
             else:
                 metadata = custom_tuple_replace(metadata,
                                                 "TrimmedAttentionMetadata",
@@ -438,23 +455,132 @@ class HpuModelAdapter(torch.nn.Module):
         if is_window_block:
             metadata = custom_tuple_replace(metadata,
                                             "TrimmedAttentionMetadata",
-                                            block_groups=block_groups)
-        block_mapping = block_mapping.to(dtype)
-        metadata = custom_tuple_replace(metadata,
-                                        "TrimmedAttentionMetadata",
-                                        block_mapping=block_mapping,
-                                        attn_bias=attn_bias)
+                                            window_block_mapping=block_mapping,
+                                            window_attn_bias=attn_bias)
+        else:
+            metadata = custom_tuple_replace(metadata,
+                                            "TrimmedAttentionMetadata",
+                                            block_mapping=block_mapping,
+                                            attn_bias=attn_bias)
         return metadata
 
-    def _update_metadata(self, attn_metadata, batch_size, seq_len, device,
-                         dtype):
+    def _update_use_window_sdpa(self, attn_metadata, seq_len):
+        use_window_sdpa = False
+        if self.use_window_sdpa and self.prefill_use_fusedsdpa:
+            # TODO: We can add min token_len for the window_sdpa to be used.
+            if self.slice_size != 0 and (seq_len % self.slice_size == 0):
+                use_window_sdpa = True
+            else:
+                raise AssertionError(
+                    f"input token length {seq_len} is not multiple "
+                    f"of SLICE_SIZE {self.slice_size}. Please adjust "
+                    f"VLLM_EXPONENTIAL_BUCKETING: False "
+                    f"VLLM_PROMPT_SEQ_BUCKET_MIN: 1024 "
+                    f"VLLM_PROMPT_SEQ_BUCKET_STEP: 1024 ")
+
+        attn_metadata = attn_metadata._replace(use_window_sdpa=use_window_sdpa)
+        return attn_metadata
+
+    def _update_metadata(self,
+                         attn_metadata,
+                         batch_size,
+                         seq_len,
+                         device,
+                         dtype,
+                         global_attn_masks=None,
+                         local_attn_masks=None):
         if attn_metadata.is_prompt:
             attn_metadata = self._set_attn_bias(attn_metadata, batch_size,
                                                 seq_len, device, dtype)
+
+            #For Gemma3, we need to override attn_mask with these sliding_window
+            #mask which are updated during prepare_attn_mask()
+            if global_attn_masks is not None:
+                attn_metadata = attn_metadata._replace(
+                    attn_bias=global_attn_masks[0])
+
+            if self.interleaved_sliding_window:
+                if local_attn_masks is not None:
+                    attn_metadata = attn_metadata._replace(
+                        window_attn_bias=local_attn_masks[0])
+                elif global_attn_masks is None:
+                    attn_metadata = self._set_attn_bias_for_sliding_window(
+                        attn_metadata, batch_size, seq_len,
+                        self.interleaved_sliding_window, device, dtype)
+
         else:
             attn_metadata = self._set_block_mapping(attn_metadata, batch_size,
                                                     device, dtype)
+
+        if hasattr(attn_metadata, 'window_block_list'
+                   ) and attn_metadata.window_block_list is not None:
+
+            attn_metadata = self._set_block_mapping(attn_metadata, batch_size,
+                                                    device, dtype, True)
         return attn_metadata
+
+    def compute_input_embeddings_for_mm_optimized(self, **kwargs):
+        input_ids = kwargs['input_ids']
+        vision_embeddings = self.model.get_multimodal_embeddings(**kwargs)
+        inputs_embeds = self.model.get_input_embeddings(
+            input_ids, vision_embeddings)
+
+        if vision_embeddings is not None:
+            input_ids = kwargs['input_ids']
+            positions = kwargs['positions']
+            kwargs = self.model.prepare_attn_masks(
+                mask_dtype=self.dtype,
+                **kwargs,
+            )
+            kwargs['input_ids'] = input_ids
+            kwargs['positions'] = positions
+            #input_ids = None
+
+        kwargs.update({'inputs_embeds': inputs_embeds})
+        # done compute the visual tokens
+        kwargs.pop('pixel_values', None)
+        return kwargs
+
+    def compute_input_embeddings_for_mrope_mm_optimized(self, **kwargs):
+
+        if 'inputs_embeds' in kwargs:
+            return kwargs
+        if not self.model_is_mrope and not self.is_mm_optimized:
+            return None
+        # For Qwen2.5-VL/Gemma3 VL multimodal embedding,
+        # this embedding part should be executed
+        # with PT_COMPILE_ONLY_MODE off at all times
+        # due to it's dynamicity.
+        # During warmup, this is ON by default, so we
+        # are turning it off here.
+        # Also, we moved this code block from
+        # model.forward() since we want to get
+        # embedding before pass it to model which is also
+        # aligned with VLLM V1.
+        compile_only_mode_context_false = functools.partial(
+            bc.env_setting, "PT_COMPILE_ONLY_MODE", False)
+
+        input_ids = kwargs['input_ids']
+        with compile_only_mode_context_false():
+            if self.model_is_mrope:
+                image_input = self.model._parse_and_validate_image_input(
+                    **kwargs)
+                video_input = self.model._parse_and_validate_video_input(
+                    **kwargs)
+                inputs_embeds = self.model.get_input_embeddings_v0(
+                    input_ids,
+                    image_input=image_input,
+                    video_input=video_input)
+                input_ids = None
+                kwargs.update({
+                    'inputs_embeds': inputs_embeds,
+                })
+                # done compute the visual tokens
+                kwargs.pop('pixel_values', None)
+                kwargs.pop('image_grid_thw', None)
+                return kwargs
+            else:
+                return self.compute_input_embeddings_for_mm_optimized(**kwargs)
 
     def forward(self, *args, **kwargs):
         # TODO(kzawora): something goes VERY WRONG when operating on
@@ -464,12 +590,26 @@ class HpuModelAdapter(torch.nn.Module):
         if 'warmup_mode' in kwargs:
             kwargs.pop('warmup_mode')
         input_ids = kwargs['input_ids']
+        global_attn_masks = kwargs.get("global_attn_masks") \
+                if kwargs.get("global_attn_masks") else None
+        local_attn_masks = kwargs.get("local_attn_masks") \
+                if kwargs.get("local_attn_masks") else None
+
         kwargs['attn_metadata'] = self._update_metadata(
             kwargs['attn_metadata'], input_ids.size(0), input_ids.size(1),
-            input_ids.device, self.dtype)
+            input_ids.device, self.dtype, global_attn_masks, local_attn_masks)
+
         if self._rotary_prepare_cos_sin is not None:
             self._rotary_prepare_cos_sin(
                 kwargs['positions'], recompute_cos_sin=self.recompute_cos_sin)
+        if self.model_is_mrope or self.is_mm_optimized:
+            # inputs_embeds was computed on execute_model
+            # now we always want to use the inputs_embeds
+            # even if the prompt is text only
+            # that keeps all the shapes consistent with warmup
+            kwargs.update({
+                'input_ids': None,
+            })
         attn_meta = kwargs.pop('attn_metadata')
         if 'kv_caches' in kwargs:
             kwargs.pop('kv_caches')
@@ -649,6 +789,11 @@ class HPUModelRunner:
         self.is_pooling_model = model_config.pooler_config is not None
 
         self.sliding_window = model_config.get_sliding_window()
+
+        self.interleaved_sliding_window = getattr(
+            self.model_config.hf_text_config, "interleaved_sliding_window",
+            None)
+
         self.block_size = cache_config.block_size
         self.max_model_len = model_config.max_model_len
         self.max_num_blocks_per_req = cdiv(self.max_model_len, self.block_size)
@@ -680,6 +825,7 @@ class HPUModelRunner:
             model_config)
         self.is_multimodal_raw_input_supported = (
             model_config.is_multimodal_raw_input_supported)
+        self.is_mm_optimized = False
 
         # Lazy initialization
         # self.model: nn.Module  # set after load_model
