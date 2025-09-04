@@ -25,17 +25,21 @@ from vllm.model_executor.layers.vocab_parallel_embedding import (
 from vllm.model_executor.model_loader.weight_utils import (
     default_weight_loader, maybe_remap_kv_scale_name)
 from vllm.model_executor.sampling_metadata import SamplingMetadata
-from vllm.model_executor.models.gemma3 import Gemma3MLP
+from vllm.model_executor.models.gemma3 import (Gemma3MLP,
+                                               Gemma3Attention,
+                                               Gemma3DecoderLayer,
+                                               Gemma3Model,
+                                               Gemma3ForCausalLM)
 from vllm.platforms import current_platform
 from vllm.sequence import IntermediateTensors
 
-from .interfaces import SupportsLoRA, SupportsPP
-from .utils import (AutoWeightsLoader, extract_layer_index,
+from vllm.model_executor.models.interfaces import SupportsLoRA, SupportsPP
+from vllm.model_executor.models.utils import (AutoWeightsLoader, extract_layer_index,
                     is_pp_missing_parameter,
                     make_empty_intermediate_tensors_factory, make_layers,
                     maybe_prefix)
 
-class GaudiGemma3Attention(nn.Module):
+class GaudiGemma3Attention(Gemma3Attention):
 
     def __init__(self,
                  config: Gemma3TextConfig,
@@ -240,7 +244,7 @@ class GaudiGemma3Attention(nn.Module):
         return out
 
 
-class GaudiGemma3DecoderLayer(nn.Module):
+class GaudiGemma3DecoderLayer(Gemma3DecoderLayer):
 
     def __init__(
         self,
@@ -308,7 +312,7 @@ class GaudiGemma3DecoderLayer(nn.Module):
 
 
 @support_torch_compile
-class GaudiGemma3Model(nn.Module):
+class GaudiGemma3Model(Gemma3Model):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
         super().__init__()
@@ -451,7 +455,7 @@ class GaudiGemma3Model(nn.Module):
         return loaded_params
 
 
-class GaudiGemma3ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
+class GaudiGemma3ForCausalLM(Gemma3ForCausalLM):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
