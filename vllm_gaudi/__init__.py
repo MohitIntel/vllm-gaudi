@@ -8,9 +8,15 @@ def register():
     if os.getenv("VLLM_WEIGHT_LOAD_FORCE_SYNC",
                  "false").lower() in ("true", "1"):
         HpuPlatform.set_synchronized_weight_loader()
+    from .models import register_model
+    register_model()
     return "vllm_gaudi.platform.HpuPlatform"
 
 
 def register_ops():
     """Register custom ops for the HPU platform."""
     import vllm_gaudi.ops  # noqa: F401
+
+##def register_model():
+##    from .models import register_model
+##   register_model()

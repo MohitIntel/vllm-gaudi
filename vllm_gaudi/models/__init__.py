@@ -15,4 +15,4 @@ def register_model():
         "vllm_gaudi.models.gemma3_mm:GaudiGemma3ForConditionalGeneration"
     )
 
-    logger.info(f"###MD:model_arch: {model_arch} has been registered here!")
+    logger.info(f"###MD:Gemma3 has been registered here!")
