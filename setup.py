@@ -64,6 +64,7 @@ setup(
     extras_require={},
     entry_points={
         "vllm.platform_plugins": ["hpu = vllm_gaudi:register"],
-        "vllm.general_plugins": ["hpu_custom_ops = vllm_gaudi:register_ops"],
+        "vllm.general_plugins": ["hpu_custom_ops = vllm_gaudi:register_ops",
+                                 "hpu_enhanced_model = vllm_gaudi:register_enhanced_model"],
     },
 )
