@@ -1,4 +1,4 @@
-from vllm import ModelRegistry
+from vllm.model_executor.models.registry import ModelRegistry
 
 def register_model():
     from .gemma3 import GaudiGemma3ForCausalLM
@@ -14,5 +14,3 @@ def register_model():
         "Gemma3ForConditionalGeneration",   # Original architecture identifier in vLLM
         "vllm_gaudi.models.gemma3_mm:GaudiGemma3ForConditionalGeneration"
     )
-
-    logger.info(f"###MD:Gemma3 has been registered here!")

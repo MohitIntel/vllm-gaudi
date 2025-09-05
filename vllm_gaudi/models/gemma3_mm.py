@@ -23,7 +23,7 @@ from vllm.multimodal.parse import (ImageProcessorItems, ImageSize,
                                    MultiModalDataItems)
 # yapf: disable
 from vllm.multimodal.processing import (BaseMultiModalProcessor,
-                                        BaseProcessingInfo, BoundPromptUpdate,
+                                        BaseProcessingInfo, ##BoundPromptUpdate,
                                         PlaceholderFeaturesInfo,
                                         PromptReplacement, PromptTargetMatch,
                                         PromptUpdate, PromptUpdateDetails,
@@ -37,16 +37,33 @@ from vllm.sequence import IntermediateTensors
 from vllm.model_executor.models.interfaces import (MultiModalEmbeddings, SupportsLoRA,
                          SupportsMultiModal, SupportsPP)
 from vllm.model_executor.models.siglip import SiglipVisionModel
-from vllm.model_executor.models.utils import (AutoWeightsLoader, flatten_bn, greedy_plan,
+from vllm.model_executor.models.utils import (AutoWeightsLoader, flatten_bn, ##greedy_plan,
                     init_vllm_registered_model, maybe_prefix,
                     merge_multimodal_embeddings)
 from vllm.model_executor.models.gemma3_mm import Gemma3ForConditionalGeneration
 
 logger = init_logger(__name__)
-is_hpu = current_platform.is_hpu()
+is_hpu = True ##current_platform.is_hpu()
 
 is_lazy = os.environ.get('PT_HPU_LAZY_MODE', '0') == '1' if is_hpu else False
 
+def greedy_plan(batchsize, available_batchsizes):
+    # sort descending
+    available_batchsizes_sorted = sorted(available_batchsizes,
+                                         key=lambda x: -x)
+    idx = 0
+    left_to_process = batchsize
+    result = []
+    while (left_to_process > 0 and idx < len(available_batchsizes_sorted)):
+        #print(idx, left_to_process, result)
+        if available_batchsizes_sorted[idx] <= left_to_process:
+            result += [available_batchsizes_sorted[idx]]
+            left_to_process -= available_batchsizes_sorted[idx]
+        else:
+            idx += 1
+    if left_to_process > 0:
+        result += [available_batchsizes_sorted[-1]]  # this will be padded
+    return result
 
 class Gemma3ImagePixelInputs(TypedDict):
     type: Literal["pixel_values"]
@@ -385,7 +402,7 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
 
     def _find_mm_placeholders(
         self,
-        mm_prompt_updates: Mapping[str, Sequence[BoundPromptUpdate]],
+        mm_prompt_updates,##: Mapping[str, Sequence[BoundPromptUpdate]],
         new_token_ids: list[int],
         mm_item_counts: Mapping[str, int],
     ) -> Mapping[str, list[PlaceholderFeaturesInfo]]:

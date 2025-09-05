@@ -15,8 +15,8 @@ from vllm.model_executor.layers.activation import GeluAndMul
 from vllm.model_executor.layers.layernorm import GemmaRMSNorm
 from vllm.model_executor.layers.linear import (MergedColumnParallelLinear,
                                                QKVParallelLinear,
-                                               RowParallelLinear,
-                                               SplitQKVParallelLinear)
+                                               RowParallelLinear,)
+                                               ##SplitQKVParallelLinear)
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.rotary_embedding import get_rope
@@ -76,6 +76,9 @@ class GaudiGemma3Attention(Gemma3Attention):
         self.split_qkv = cache_config.split_qkv
 
         if self.split_qkv:
+            pass
+            ##TODO MD
+            '''
             self.qkv_proj = SplitQKVParallelLinear(
                 hidden_size,
                 self.head_dim,
@@ -85,6 +88,7 @@ class GaudiGemma3Attention(Gemma3Attention):
                 quant_config=quant_config,
                 prefix=f"{prefix}.qkv_proj",
             )
+            '''
         else:
             self.qkv_proj = QKVParallelLinear(
                 hidden_size,
