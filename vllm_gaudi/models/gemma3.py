@@ -39,7 +39,7 @@ from vllm.model_executor.models.utils import (AutoWeightsLoader, extract_layer_i
                     make_empty_intermediate_tensors_factory, make_layers,
                     maybe_prefix)
 
-class GaudiGemma3Attention(Gemma3Attention):
+class GaudiGemma3Attention(nn.Module):
 
     def __init__(self,
                  config: Gemma3TextConfig,
@@ -52,6 +52,20 @@ class GaudiGemma3Attention(Gemma3Attention):
                  quant_config: Optional[QuantizationConfig] = None,
                  attn_logits_soft_cap: Optional[float] = None,
                  prefix: str = "") -> None:
+        ##MD 
+        '''
+        super().__init__(
+                 config,
+                 hidden_size,
+                 num_heads,
+                 num_kv_heads,
+                 head_dim,
+                 max_position_embeddings,
+                 cache_config,
+                 quant_config,
+                 attn_logits_soft_cap,
+                 prefix)
+        '''
         super().__init__()
         self.config = config
         self.hidden_size = hidden_size
@@ -73,7 +87,7 @@ class GaudiGemma3Attention(Gemma3Attention):
         self.q_size = self.num_heads * self.head_dim
         self.kv_size = self.num_kv_heads * self.head_dim
         self.scaling = config.query_pre_attn_scalar**-0.5
-        self.split_qkv = cache_config.split_qkv
+        self.split_qkv = cache_config.split_qkv if hasattr(cache_config,"split_qkv") else None
 
         if self.split_qkv:
             pass
@@ -170,14 +184,17 @@ class GaudiGemma3Attention(Gemma3Attention):
         attn_output = self.attn(q, k, v)
         print("##MD: Inside GaudiGemma3Attention")
 
-        if current_platform.is_hpu() or not kwargs.get("has_images", False):
+        ##if current_platform.is_hpu() or not kwargs.get("has_images", False):
             # In HPU, naive_attn_with_masks is no longer needed since
             # sliding_window is supported in hpu_attn.
 
             # Fast path for text-only inputs. The performance for the text-only
             # inputs are not affected by the naive attention below.
-            output, _ = self.o_proj(attn_output)
-            return output
+            ##output, _ = self.o_proj(attn_output)
+            ##return output
+        output, _ = self.o_proj(attn_output)
+        return output
+
 
         # NOTE(woosuk): Gemma3 uses bidirectional attention between image tokens
         # that correspond to the same image while using causal attention
@@ -248,7 +265,7 @@ class GaudiGemma3Attention(Gemma3Attention):
         return out
 
 
-class GaudiGemma3DecoderLayer(Gemma3DecoderLayer):
+class GaudiGemma3DecoderLayer(nn.Module):
 
     def __init__(
         self,
@@ -257,6 +274,14 @@ class GaudiGemma3DecoderLayer(Gemma3DecoderLayer):
         quant_config: Optional[QuantizationConfig] = None,
         prefix: str = "",
     ) -> None:
+        '''
+        super().__init__(
+                config,
+                cache_config,
+                quant_config,
+                prefix
+            )
+        '''
         super().__init__()
         self.hidden_size = config.hidden_size
         self.self_attn = GaudiGemma3Attention(
@@ -316,9 +341,10 @@ class GaudiGemma3DecoderLayer(Gemma3DecoderLayer):
 
 
 @support_torch_compile
-class GaudiGemma3Model(Gemma3Model):
+class GaudiGemma3Model(nn.Module):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+        ##super().__init__(vllm_config=vllm_config, prefix=prefix)
         super().__init__()
         config = vllm_config.model_config.hf_config
         cache_config = vllm_config.cache_config
@@ -349,7 +375,9 @@ class GaudiGemma3Model(Gemma3Model):
         self.make_empty_intermediate_tensors = (
             make_empty_intermediate_tensors_factory(
                 ["hidden_states", "residual"], config.hidden_size))
-        self.split_qkv = cache_config.split_qkv
+        ##MD:cache_config has no attribute split qkv
+        self.split_qkv = cache_config.split_qkv if hasattr(cache_config,"split_qkv") else None
+
 
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         # NOTE(woosuk): Only apply the normalizer to the output of
@@ -459,7 +487,7 @@ class GaudiGemma3Model(Gemma3Model):
         return loaded_params
 
 
-class GaudiGemma3ForCausalLM(Gemma3ForCausalLM):
+class GaudiGemma3ForCausalLM(nn.Module):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -473,17 +501,20 @@ class GaudiGemma3ForCausalLM(Gemma3ForCausalLM):
     }
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+        ##super().__init__(vllm_config=vllm_config, prefix=prefix)
+        super().__init__()
         config = vllm_config.model_config.hf_config
         quant_config = vllm_config.quant_config
         lora_config = vllm_config.lora_config
         del lora_config  # Unused.
-        super().__init__()
         self.config = config
         # currently all existing Gemma models have `tie_word_embeddings` enabled
         assert config.tie_word_embeddings
         self.quant_config = quant_config
+        
         self.model = GaudiGemma3Model(vllm_config=vllm_config,
                                  prefix=maybe_prefix(prefix, "model"))
+        
         self.logits_processor = LogitsProcessor(
             config.vocab_size, soft_cap=config.final_logit_softcapping)
         self.make_empty_intermediate_tensors = (
