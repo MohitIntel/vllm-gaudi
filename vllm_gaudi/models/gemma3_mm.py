@@ -286,11 +286,13 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
         prompt: str,
         mm_data: Mapping[str, object],
         mm_kwargs: Mapping[str, object],
+        tok_kwargs: Mapping[str, object],
     ) -> BatchFeature:
         processed_outputs = super()._call_hf_processor(
             prompt,
             mm_data,
             mm_kwargs,
+            tok_kwargs,
         )
         if "pixel_values" in processed_outputs:
             # Cast pixel values to model dtype already here,
@@ -363,12 +365,12 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
         self,
         prompt: list[int],
         mm_matches: Mapping[str, Sequence[PromptTargetMatch]],
-        mm_item_counts: Mapping[str, int],
+        ##mm_item_counts: Mapping[str, int],
     ) -> list[int]:
         token_ids = super()._apply_token_matches(
             prompt,
             mm_matches,
-            mm_item_counts,
+            ##mm_item_counts,
         )
 
         # "\n\n\n" and "\n\n\n\n" are single tokens
@@ -402,9 +404,10 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
 
     def _find_mm_placeholders(
         self,
-        mm_prompt_updates,##: Mapping[str, Sequence[BoundPromptUpdate]],
+        ##mm_prompt_updates,##: Mapping[str, Sequence[BoundPromptUpdate]],
         new_token_ids: list[int],
-        mm_item_counts: Mapping[str, int],
+        mm_prompt_updates
+        ##mm_item_counts: Mapping[str, int],
     ) -> Mapping[str, list[PlaceholderFeaturesInfo]]:
         # We need to detect "\n\n" inside "\n\n\n" and "\n\n\n\n"
         tokenizer = self.info.get_tokenizer()
@@ -429,8 +432,8 @@ class Gemma3MultiModalProcessor(BaseMultiModalProcessor[Gemma3ProcessingInfo]):
             repl_token_ids.extend(repl_toks)
             repl_orig_idxs.extend(orig_idx for _ in range(len(repl_toks)))
 
-        repls = find_mm_placeholders(mm_prompt_updates, repl_token_ids,
-                                     mm_item_counts)
+        repls = super()._find_mm_placeholders(repl_token_ids,
+                                              mm_prompt_updates)
 
         return {
             modality: [
@@ -489,7 +492,8 @@ class Gemma3MultiModalProjector(nn.Module):
 @MULTIMODAL_REGISTRY.register_processor(Gemma3MultiModalProcessor,
                                         info=Gemma3ProcessingInfo,
                                         dummy_inputs=Gemma3DummyInputsBuilder)
-class GaudiGemma3ForConditionalGeneration(Gemma3ForConditionalGeneration):
+class GaudiGemma3ForConditionalGeneration(nn.Module, SupportsMultiModal, SupportsPP,
+                                          SupportsLoRA):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -588,10 +592,10 @@ class GaudiGemma3ForConditionalGeneration(Gemma3ForConditionalGeneration):
 
         pixel_values = image_input["pixel_values"]
         num_patches = image_input["num_patches"]
-
+        ''' ##MD 
         if is_hpu:
             batch_breakdown = greedy_plan(pixel_values.shape[0], \
-                    self.vision_buckets.multimodal_buckets)
+                    ##self.vision_buckets.multimodal_buckets)
             start_idx = 0
             image_embeds_multibatches = []
 
@@ -610,7 +614,10 @@ class GaudiGemma3ForConditionalGeneration(Gemma3ForConditionalGeneration):
                 image_embeds_multibatches += [image_embeds.clone()]
                 start_idx = end_idx
             image_embeds = torch.cat(image_embeds_multibatches, dim=0)
+        
         else:
+        '''
+        if is_hpu:
             image_features = self._image_pixels_to_features(
                 self.vision_tower,
                 pixel_values,
@@ -661,9 +668,9 @@ class GaudiGemma3ForConditionalGeneration(Gemma3ForConditionalGeneration):
         # NOTE: In v1, inputs_embeds is always generated at model runner, this
         # condition is for v0 compatibility.
         elif inputs_embeds is None:
-            if is_hpu:
-                raise AssertionError("hpu_model_runner should be computing \
-                        inputs_embeds")
+            ##MDif is_hpu:
+            ##    raise AssertionError("hpu_model_runner should be computing \
+            ##            inputs_embeds")
             vision_embeddings = self.get_multimodal_embeddings(**kwargs)
 
             inputs_embeds = self.get_input_embeddings(input_ids,
