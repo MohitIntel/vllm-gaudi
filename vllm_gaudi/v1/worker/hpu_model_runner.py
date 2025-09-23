@@ -2863,20 +2863,28 @@ class HPUModelRunner(KVConnectorModelRunnerMixin):
                 torch.hpu.synchronize()
             msg = (f"L2864 Before Prefill loop begins: {m.get_summary_string()}")
             logger.info(msg)
+            logger.info(htorch.hpu.memory_summary())
             for idx, (req_id, prompt_len, token_ids, position_ids, attn_metadata, logits_indices,
                       logits_requests) in enumerate(zip(*shallow_tuple(prefill_data))):
-                with HabanaMemoryProfiler() as m:
-                    torch.hpu.synchronize()
+                ##with HabanaMemoryProfiler() as m:
+                ##    torch.hpu.synchronize()
                 msg = (f"L2870 Prefill loop begins: {m.get_summary_string()}")
                 logger.info(msg)
+                logger.info(htorch.hpu.memory_summary())
                 inputs_embeds = None
                 model_mm_kwargs = None
                 if self.supports_mm_inputs:
                     # Run the multimodal encoder if any.
                     with self.profiler.record_event('internal', 'prepare_input_encoders'):
                         self._execute_mm_encoder(scheduler_output, req_id)
+                        msg = (f"L2880 After _execute_mm_encoder:")
+                        logger.info(msg)
+                        logger.info(htorch.hpu.memory_summary())
 
                     mm_embeds = self._gather_mm_embeddings(scheduler_output, req_id)
+                    msg = (f"L2880 After _gather_mm_embeddings:")
+                    logger.info(msg)
+                    logger.info(htorch.hpu.memory_summary())
                     # TODO: Only get embeddings for valid token_ids. Ignore token_ids[<pad_idxs>] # noqa E501
                     # This may require moving multimodal input preps into _prepare_inputs,        # noqa E501
                     # to avoid padding issues.
@@ -2884,10 +2892,11 @@ class HPUModelRunner(KVConnectorModelRunnerMixin):
                         input_ids=token_ids,
                         multimodal_embeddings=mm_embeds or None,
                     )
-                    with HabanaMemoryProfiler() as m:
-                        torch.hpu.synchronize()
-                    msg = (f"L2889:After get_input_embeddings multimodal processing:  {m.get_summary_string()}")
+                    ##with HabanaMemoryProfiler() as m:
+                    ##    torch.hpu.synchronize()
+                    msg = (f"L2889:After get_input_embeddings multimodal processing:")
                     logger.info(msg)
+                    logger.info(htorch.hpu.memory_summary())
                     model_mm_kwargs = self._extract_mm_kwargs(scheduler_output)
                     model_mm_kwargs = MultiModalKwargs.as_kwargs(
                         model_mm_kwargs,
@@ -2895,10 +2904,11 @@ class HPUModelRunner(KVConnectorModelRunnerMixin):
                     )
 
                 lora_mask, lora_logits_mask = self._configure_lora(token_ids, self.requests, req_id, True)
-                with HabanaMemoryProfiler() as m:
-                    torch.hpu.synchronize()
+                ##with HabanaMemoryProfiler() as m:
+                ##    torch.hpu.synchronize()
                 msg = (f"L2900: Before Model text begin:  {m.get_summary_string()}")
                 logger.info(msg)
+                logger.info(htorch.hpu.memory_summary())
 
                 self.event_start = self.profiler.get_timestamp_us()
                 self.profiler.start("internal", "prefill")
@@ -2916,10 +2926,11 @@ class HPUModelRunner(KVConnectorModelRunnerMixin):
                         # Depends on 1 decode token/batch
                         invalid_req_indices.append(num_decodes + idx)
                 htorch.core.mark_step()
-                with HabanaMemoryProfiler() as m:
-                    torch.hpu.synchronize()
+                ##with HabanaMemoryProfiler() as m:
+                ##    torch.hpu.synchronize()
                 msg = (f"L2906:Model text begin:  {m.get_summary_string()}")
                 logger.info(msg)
+                logger.info(htorch.hpu.memory_summary())
                 non_flattened_hidden_states, aux_hidden_states, \
                     sample_hidden_states, logits_device = \
                     self._execute_model_generic(
@@ -2931,10 +2942,11 @@ class HPUModelRunner(KVConnectorModelRunnerMixin):
                         model_mm_kwargs=model_mm_kwargs,
                         warmup_mode=warmup_mode,)
                 htorch.core.mark_step()
-                with HabanaMemoryProfiler() as m:
-                    torch.hpu.synchronize()
+                ##with HabanaMemoryProfiler() as m:
+                ##    torch.hpu.synchronize()
                 msg = (f"L2922:Model text done:  {m.get_summary_string()}")
                 logger.info(msg)
+                logger.info(htorch.hpu.memory_summary())
                 non_flattened_hidden_states_prefills.append(non_flattened_hidden_states)
                 if self.use_aux_hidden_state_outputs:
                     aux_hidden_states_prefills.append(aux_hidden_states)
